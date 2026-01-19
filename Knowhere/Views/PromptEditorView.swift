@@ -22,6 +22,7 @@ struct PromptEditorView: View {
     @State private var content: String = ""
     @State private var selectedCategoryId: UUID?
     @State private var isFavorite: Bool = false
+    @FocusState private var isTitleFocused: Bool
     
     var isEditing: Bool {
         if case .edit = mode { return true }
@@ -69,6 +70,7 @@ struct PromptEditorView: View {
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(Color.white.opacity(0.1))
                             )
+                            .focused($isTitleFocused)
                     }
                     
                     // Category picker
@@ -153,7 +155,7 @@ struct PromptEditorView: View {
                     savePrompt()
                     dismiss()
                 }
-                .keyboardShortcut(.defaultAction)
+                .keyboardShortcut(.return, modifiers: .command) // Cmd+Enter to save
                 .disabled(title.isEmpty || content.isEmpty)
                 .buttonStyle(.borderedProminent)
             }
@@ -168,6 +170,10 @@ struct PromptEditorView: View {
                 content = prompt.content
                 selectedCategoryId = prompt.categoryId
                 isFavorite = prompt.isFavorite
+            }
+            // Delay focus to ensure sheet is fully presented
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isTitleFocused = true
             }
         }
     }

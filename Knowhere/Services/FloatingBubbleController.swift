@@ -79,6 +79,27 @@ class FloatingBubbleController: NSObject {
                 return nil
             }
             
+            // Cmd+P - Prompts (always available)
+            if modifiers == .command && event.charactersIgnoringModifiers == "p" {
+                if !self.isExpanded { self.expand() }
+                self.handleAction(.prompts)
+                return nil
+            }
+            
+            // Cmd+R - Recent (always available)
+            if modifiers == .command && event.charactersIgnoringModifiers == "r" {
+                if !self.isExpanded { self.expand() }
+                self.handleAction(.recent)
+                return nil
+            }
+            
+            // Cmd+F - Favorites (always available)
+            if modifiers == .command && event.charactersIgnoringModifiers == "f" {
+                if !self.isExpanded { self.expand() }
+                self.handleAction(.favorites)
+                return nil
+            }
+            
             // === BUBBLE-SPECIFIC SHORTCUTS (only when menu is expanded) ===
             guard self.isExpanded else { return event }
             

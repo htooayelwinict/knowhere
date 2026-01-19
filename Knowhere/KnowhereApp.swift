@@ -317,9 +317,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         
         // First ensure main window is open and visible
         openMainWindow()
+        
+        // Activate app to ensure it receives focus
+        NSApp.activate(ignoringOtherApps: true)
 
         // Longer delay to ensure window is fully ready and view hierarchy is set up
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             NSLog("🔵 Posting showNewPromptSheet notification")
             // Post the sheet notification after window is visible
             NotificationCenter.default.post(name: .showNewPromptSheet, object: nil)

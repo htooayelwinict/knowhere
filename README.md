@@ -64,6 +64,15 @@
    - Use menu shortcuts to open **Prompts**, **Favorites**, or create a **New** prompt.
    - The menu smart-adapts its layout based on where you drag it.
 
+### ⌨️ Keyboard Shortcuts
+- Cmd+N: New prompt (works from main window or bubble)
+- Cmd+P: Open Prompts submenu (auto-expands bubble if collapsed)
+- Cmd+R: Open Recent submenu (auto-expands bubble if collapsed)
+- Cmd+F: Open Favorites submenu (auto-expands bubble if collapsed)
+- Cmd+Enter: Save/Create in Prompt Editor
+- Cmd+,: Open Settings
+- Esc: Cancel/close current sheet or menu where applicable
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

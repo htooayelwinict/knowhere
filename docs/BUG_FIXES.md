@@ -4,6 +4,46 @@
 
 ---
 
+### Issue: Bubble Keyboard Shortcuts Missing for Prompt Lists
+
+**Severity:** Medium
+**Status:** ✅ Fixed
+
+#### Problem
+From the bubble, users could not jump directly to **Prompts**, **Recent**, or **Favorites** via keyboard. This forced manual clicks and slowed workflows.
+
+#### Solution
+- Added **Cmd+P** (Prompts), **Cmd+R** (Recent), **Cmd+F** (Favorites) as **global shortcuts** that work whenever Knowhere is active.
+- If the bubble is collapsed, these shortcuts auto-expand it before opening the selected list.
+
+#### Files Modified
+- `Knowhere/Services/FloatingBubbleController.swift` — Added global handlers that expand then route to the requested submenu.
+
+---
+
+### Issue: New Prompt Sheet Lacked Focus When Triggered from Bubble
+
+**Severity:** Medium
+**Status:** ✅ Fixed
+
+#### Problem
+Triggering **New Prompt** from the bubble sometimes opened the sheet without activating the app or focusing an input. Pasting commands could break across lines (e.g., `build` → `buil\nd`) and keyboard shortcuts felt unresponsive.
+
+#### Root Cause
+- The app window was not force-activated before presenting the sheet.
+- The sheet did not set an initial first responder, so focus could land unpredictably.
+
+#### Solution
+- Force-activate the app before showing the sheet and give the window a slightly longer settle time.
+- Add explicit focus management so the **Title** field becomes first responder on appear.
+- Keep Cmd+Enter as the explicit save accelerator for reliability.
+
+#### Files Modified
+- `Knowhere/KnowhereApp.swift` — Call `NSApp.activate(ignoringOtherApps: true)` and extend the show-sheet delay.
+- `Knowhere/Views/PromptEditorView.swift` — Add `@FocusState` and set focus to the title field on appear; keep explicit `Cmd+Enter` save shortcut.
+
+---
+
 ### Issue: Floating Bubble Doesn't Show New Prompts Created in Main Window
 
 **Severity:** High
