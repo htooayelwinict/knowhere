@@ -1,117 +1,73 @@
-# Knowhere - AI Prompt Manager
+# Knowhere - AI Prompt Manager for macOS
 
-A native macOS app to collect, organize, and quickly access your AI prompts. Built for MacBook Air M1 with SwiftUI.
+**Knowhere** is a native macOS utility designed to organize, manage, and quickly access your AI prompts. It features a unique **AssistantTouch-style floating bubble** that stays with you, offering instant access to your prompt library from any application.
 
-![Knowhere](https://img.shields.io/badge/Platform-macOS%2013+-blue) ![Swift](https://img.shields.io/badge/Swift-5.9+-orange)
+![Platform](https://img.shields.io/badge/Platform-macOS%2013+-000000.svg?style=for-the-badge&logo=apple)
+![Swift](https://img.shields.io/badge/Swift-5.9-F05138.svg?style=for-the-badge&logo=swift)
+![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
 
-## ✨ Features
+## ✨ Key Features
 
-- **📚 Prompt Library** - Store and organize your AI prompts with titles, descriptions, and categories
-- **🪟 Floating Panel** - A small overlay window that stays on top of other apps for quick access
-- **📋 Quick Copy** - One-click to copy any prompt to clipboard
-- **🔍 Search** - Instantly filter prompts by title or content
-- **🏷️ Categories** - Organize prompts into custom categories (Coding, Writing, Research, etc.)
-- **⌨️ Keyboard Shortcut** - Global hotkey `⌥ Space` (Option + Space) to show/hide the floating panel
+### 🟣 Floating Bubble & Radial Menu
+- **AssistiveTouch Style**: A subtle floating bubble that sits on top of your workflow.
+- **Smart Radial Menu**: Tapping the bubble expands a beautiful radial menu that **automatically adapts** to its screen position (flips left/right/up/down) to stay on screen.
+- **Physics-Based Drag**: Satisfying, zero-lag dragging mechanics.
+
+### 📚 Powerful Prompt Management
+- **Library**: Organize your best prompts with title, description, and copy-able content.
+- **Categories**: Sort into Coding, Writing, Research, and more.
+- **Favorites**: Star your most used prompts for instant access.
+- **Search**: Fuzzy search to find exactly what you need in milliseconds.
+
+### ⌨️ Native Workflow
+- **Global Hotkey**: Toggle visibility instantly (Default: `Cmd + Shift + K`).
+- **Quick Copy**: One-click copying to clipboard.
+- **Keyboard Navigation**: Optimized for speed.
+
+## 🛠️ Technology Stack
+- **SwiftUI** & **AppKit**
+- **Combine** Framework
+- **Custom View Modifiers** for Glassmorphism
+- **NSEvent** for precise global input handling
 
 ## 🚀 Getting Started
 
 ### Prerequisites
+- macOS 13.0 (Ventura) or later
+- Xcode 15+
 
-- macOS 13.0 or later
-- Xcode 15.0 or later
+### Installation
 
-### Building the App
-
-1. **Open in Xcode**
+1. Clone the repository:
    ```bash
-   cd /Users/lewisae/Documents/VSCode/Mac-App/knowhere/Knowhere
-   open Knowhere.xcodeproj
+   git clone https://github.com/htooayelwinict/knowhere.git
+   cd knowhere
    ```
-   
-   Or double-click `Knowhere.xcodeproj` in Finder.
 
-2. **Build and Run**
-   - Press `⌘ R` (Command + R) in Xcode
-   - Or select **Product → Run** from the menu
+2. Open the project in Xcode:
+   ```bash
+   open Knowhere/Knowhere.xcodeproj
+   ```
 
-3. **Trust the App** (First Run)
-   - macOS may ask you to allow the app in System Preferences → Privacy & Security
-   - For the global hotkey to work, grant Accessibility permissions when prompted
+3. Build and run (Cmd + R).
 
-## 📖 How to Use
+> **Note**: You may need to grant **Accessibility Permissions** in System Settings for the global hotkey and floating panel features to work correctly.
 
-### Main Window
-- **Sidebar**: Navigate between All Prompts, Favorites, Recent, and Categories
-- **Prompt List**: Browse and search your prompts
-- **Detail View**: View the full prompt content and copy to clipboard
+## 📖 Usage
 
-### Floating Panel
-- Press `⌥ Space` (Option + Space) from anywhere to toggle the floating panel
-- Search for prompts and click to copy instantly
-- Click on a prompt to copy it to your clipboard
+1. **Launch Knowhere**. The main window will appear.
+2. **Add Prompts**: Use the `+` button to create new prompts.
+3. **Close Window**: The app continues running in the background.
+4. **Floating Bubble**:
+   - Drag the bubble anywhere on your screen.
+   - Click to open the **Radial Menu**.
+   - Use menu shortcuts to open **Prompts**, **Favorites**, or create a **New** prompt.
+   - The menu smart-adapts its layout based on where you drag it.
 
-### Managing Prompts
-- **Add Prompt**: Click the `+` button or press `⌘ N`
-- **Edit Prompt**: Right-click on a prompt and select "Edit"
-- **Delete Prompt**: Right-click and select "Delete"
-- **Favorite**: Right-click and toggle "Add to Favorites"
+## 🤝 Contributing
 
-### Categories
-- Default categories include: Coding, Writing, Research, Creative, Business
-- Add new categories from the sidebar
-- Assign categories when creating or editing prompts
-
-## 📁 Project Structure
-
-```
-Knowhere/
-├── KnowhereApp.swift          # Main app entry point
-├── Models/
-│   ├── Prompt.swift           # Prompt data model
-│   └── Category.swift         # Category data model
-├── Views/
-│   ├── ContentView.swift      # Main window view
-│   ├── SidebarView.swift      # Category sidebar
-│   ├── PromptListView.swift   # Prompt list with search
-│   ├── PromptDetailView.swift # Full prompt view
-│   ├── PromptEditorView.swift # Add/edit prompt form
-│   ├── FloatingPanelView.swift # Overlay panel UI
-│   └── SettingsView.swift     # App settings
-├── Services/
-│   ├── PromptStore.swift      # Data management & persistence
-│   └── FloatingPanelController.swift # Floating window controller
-└── Resources/
-    └── Assets.xcassets/       # App icons and colors
-```
-
-## 💾 Data Storage
-
-Your prompts and categories are automatically saved to:
-```
-~/Library/Application Support/Knowhere/
-├── prompts.json
-└── categories.json
-```
-
-You can backup these files to preserve your data.
-
-## 🔧 Configuration
-
-### Settings (Preferences → Settings)
-- Enable/disable global keyboard shortcut
-- Export/import data for backup
-
-### Keyboard Shortcuts
-| Shortcut | Action |
-|----------|--------|
-| `⌥ Space` | Toggle floating panel |
-| `⌘ N` | New prompt |
-| `⌘ ,` | Open settings |
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📝 License
 
-MIT License - Feel free to use and modify!
-
----
-
-Made with ❤️ for productive AI users
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

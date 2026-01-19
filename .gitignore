@@ -13,10 +13,12 @@ DerivedData/
 !default.mode2v3
 *.perspectivev3
 !default.perspectivev3
+*.storekit
 
 # User-specific
 xcuserdata/
 *.xcworkspace/xcuserdata/
+.DS_Store
 
 # Swift Package Manager
 .build/
@@ -44,9 +46,11 @@ Carthage/Build/
 *.dSYM.zip
 *.dSYM
 
-# Playgrounds
-timeline.xctimeline
-playground.xcworkspace
+# AI/Agent
+.claude/
+.gemini/
+CLAUDE.md
+INVESTIGATION_RESULTS.md
 
 # Editor
 .vscode/
