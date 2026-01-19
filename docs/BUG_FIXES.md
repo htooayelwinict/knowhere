@@ -15,66 +15,41 @@ When creating a new prompt in the main Knowhere window, the floating bubble's su
 #### Root Cause
 **Multiple PromptStore Instances Not Sharing Data**
 
-The app was creating **three separate** `PromptStore` instances:
-1. `KnowhereApp` → `@StateObject private var promptStore = PromptStore()` (used by main window)
-2. `FloatingBubbleController` → `self.promptStore = PromptStore()` (used by bubble)
-3. `FloatingPanelController` → `self.promptStore = PromptStore()` (used by floating panel)
+The app was creating **separate** `PromptStore` instances:
+1. `KnowhereApp` → Created its own `PromptStore`
+2. `FloatingBubbleController` → Created its own `PromptStore`
+3. `FloatingPanelController` → Created its own `PromptStore`
 
-Each instance independently loaded data from disk at startup. When the main window added a prompt, it saved to disk and updated its own `@Published var prompts`, but the bubble/panel still referenced their old in-memory copies.
+Each instance independently loaded data from disk at startup. When the main window added a prompt, it saved to disk and updated its own `@Published var prompts`, but the bubble/panel still referenced their separate in-memory copies.
 
 #### Solution
-**Share Single PromptStore Instance Across All Controllers**
+**Singleton Pattern - Single Shared PromptStore Instance**
 
-**1. Modified FloatingBubbleController to accept shared PromptStore:**
 ```swift
-// Accept optional PromptStore, create new one if not provided
-init(promptStore: PromptStore? = nil) {
-    self.promptStore = promptStore ?? PromptStore()
-    super.init()
-    // ...
-}
-
-// Allow updating the PromptStore after initialization
-func updatePromptStore(_ newStore: PromptStore) {
-    self.promptStore = newStore
-}
-```
-
-**2. Modified FloatingPanelController to accept shared PromptStore:**
-```swift
-// Accept optional PromptStore, create new one if not provided
-init(promptStore: PromptStore? = nil) {
-    self.promptStore = promptStore ?? PromptStore()
-    super.init()
-    setupPanel()
-}
-
-// Allow updating the PromptStore after initialization
-func updatePromptStore(_ newStore: PromptStore) {
-    self.promptStore = newStore
-    setupPanel() // Recreate panel with new store
-}
-```
-
-**3. Updated KnowhereApp to inject shared PromptStore:**
-```swift
-.onAppear {
-    // Share PromptStore with AppDelegate
-    appDelegate.sharedPromptStore = promptStore
+// PromptStore.swift
+class PromptStore: ObservableObject {
+    // SINGLETON - All components use this ONE instance
+    static let shared = PromptStore()
     
-    // CRITICAL: Update floating controllers with shared PromptStore
-    appDelegate.floatingBubble?.updatePromptStore(promptStore)
-    appDelegate.floatingPanel?.updatePromptStore(promptStore)
-    NSLog("✅ Shared PromptStore with FloatingBubble and FloatingPanel")
+    @Published var prompts: [Prompt] = []
     // ...
 }
+
+// FloatingBubbleController.swift
+private var promptStore = PromptStore.shared
+
+// FloatingPanelController.swift
+private var promptStore = PromptStore.shared
+
+// KnowhereApp.swift
+@ObservedObject private var promptStore = PromptStore.shared
 ```
 
 #### Data Flow (After Fix)
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   Single PromptStore Instance               │
-│    (Created by KnowhereApp, shared via AppDelegate)         │
+│              PromptStore.shared (SINGLETON)                 │
+│         ONE instance used by ALL components                 │
 └─────────────────────────────────────────────────────────────┘
             ▲              ▲                ▲
             │              │                │
@@ -84,15 +59,35 @@ func updatePromptStore(_ newStore: PromptStore) {
      └─────────────┘ └───────────┘ └───────────────┘
 ```
 
+#### Additional Fix: Reactive Submenu View
+The submenu view was also receiving a static array instead of observing the PromptStore:
+
+```swift
+// OLD - Static array, not reactive
+struct RadialSubmenuView: View {
+    let prompts: [Prompt]  // ← Snapshot, never updates
+}
+
+// NEW - Observes PromptStore via EnvironmentObject
+struct RadialSubmenuView: View {
+    @EnvironmentObject var promptStore: PromptStore
+    let filter: SubmenuFilter  // .all, .favorites, .recent
+    
+    private var basePrompts: [Prompt] {
+        switch filter {
+        case .all: return promptStore.prompts
+        case .favorites: return promptStore.prompts.filter { $0.isFavorite }
+        case .recent: return promptStore.recentPrompts
+        }
+    }
+}
+```
+
 #### Files Modified
-- [FloatingBubbleController.swift](../Knowhere/Services/FloatingBubbleController.swift)
-  - Added `init(promptStore:)` parameter
-  - Added `updatePromptStore(_:)` method
-- [FloatingPanelController.swift](../Knowhere/Services/FloatingPanelController.swift)
-  - Added `init(promptStore:)` parameter
-  - Added `updatePromptStore(_:)` method
-- [KnowhereApp.swift](../Knowhere/KnowhereApp.swift)
-  - Added calls to `updatePromptStore()` in `onAppear`
+- [PromptStore.swift](../Knowhere/Services/PromptStore.swift) - Added singleton pattern
+- [FloatingBubbleController.swift](../Knowhere/Services/FloatingBubbleController.swift) - Use singleton, reactive submenu
+- [FloatingPanelController.swift](../Knowhere/Services/FloatingPanelController.swift) - Use singleton
+- [KnowhereApp.swift](../Knowhere/KnowhereApp.swift) - Use singleton
 
 ---
 

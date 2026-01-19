@@ -12,7 +12,8 @@ import Foundation
 @main
 struct KnowhereApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var promptStore = PromptStore()
+    // Use the SINGLETON PromptStore - all components share this ONE instance
+    @ObservedObject private var promptStore = PromptStore.shared
 
     var body: some Scene {
         WindowGroup(id: "mainWindow") {
@@ -23,17 +24,10 @@ struct KnowhereApp: App {
                     showingNewPrompt = true
                 }
                 .onAppear {
-                    // Share PromptStore with AppDelegate (critical for programmatic windows)
+                    // Share PromptStore reference with AppDelegate (for programmatic windows)
                     appDelegate.sharedPromptStore = promptStore
                     
-                    // CRITICAL: Update floating controllers with shared PromptStore
-                    // This ensures bubble/panel show same data as main window
-                    appDelegate.floatingBubble?.updatePromptStore(promptStore)
-                    appDelegate.floatingPanel?.updatePromptStore(promptStore)
-                    NSLog("✅ Shared PromptStore with FloatingBubble and FloatingPanel")
-                    
                     // Capture openWindow action when window appears
-                    NSLog("✅ ContentView.onAppear - Sharing PromptStore and capturing openWindow action")
                     appDelegate.openMainWindowAction = openMainWindow
                     
                     // Configure this window to NOT be released when closed
@@ -42,7 +36,6 @@ struct KnowhereApp: App {
                             window.isReleasedWhenClosed = false
                             window.delegate = appDelegate
                             appDelegate.swiftUIMainWindow = window
-                            NSLog("✅ Configured window: isReleasedWhenClosed=false, delegate set")
                         }
                     }
                 }

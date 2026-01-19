@@ -13,7 +13,8 @@ class FloatingBubbleController: NSObject {
     private var bubbleWindow: NSWindow?
     private var radialMenuWindow: NSWindow?
     private var submenuWindow: NSWindow?
-    private var promptStore: PromptStore
+    // Use the SINGLETON PromptStore - automatically synced with main app
+    private var promptStore = PromptStore.shared
     private var isExpanded = false
     private var bubblePosition: NSPoint = .zero
     
@@ -39,17 +40,10 @@ class FloatingBubbleController: NSObject {
     static let submenuWidth: CGFloat = 300
     static let submenuHeight: CGFloat = 340
     
-    // Accept optional PromptStore, create new one if not provided
-    init(promptStore: PromptStore? = nil) {
-        self.promptStore = promptStore ?? PromptStore()
+    override init() {
         super.init()
         setupBubble()
         setupRadialMenu()
-    }
-    
-    // Allow updating the PromptStore after initialization (for shared store injection)
-    func updatePromptStore(_ newStore: PromptStore) {
-        self.promptStore = newStore
     }
     
     // MARK: - Setup
@@ -350,11 +344,11 @@ class FloatingBubbleController: NSObject {
     private func handleAction(_ action: RadialAction) {
         switch action {
         case .prompts:
-            showSubmenu(with: promptStore.prompts, title: "All Prompts")
+            showSubmenu(filter: .all, title: "All Prompts")
         case .favorites:
-            showSubmenu(with: promptStore.prompts.filter { $0.isFavorite }, title: "Favorites")
+            showSubmenu(filter: .favorites, title: "Favorites")
         case .recent:
-            showSubmenu(with: promptStore.recentPrompts, title: "Recent")
+            showSubmenu(filter: .recent, title: "Recent")
         case .newPrompt:
             // Post notification to AppDelegate to handle (opens window + shows sheet)
             NotificationCenter.default.post(name: .newPrompt, object: nil)
@@ -369,12 +363,12 @@ class FloatingBubbleController: NSObject {
         }
     }
     
-    private func showSubmenu(with prompts: [Prompt], title: String) {
+    private func showSubmenu(filter: SubmenuFilter, title: String) {
         // CRITICAL: Close any existing submenu first to prevent orphaned windows
         hideSubmenuImmediately()
         
         let submenuView = RadialSubmenuView(
-            prompts: prompts,
+            filter: filter,
             title: title,
             onCopy: { [weak self] prompt in
                 self?.promptStore.copyPrompt(prompt)
@@ -387,6 +381,7 @@ class FloatingBubbleController: NSObject {
                 self?.onHoverStateChange(component: "submenu", isHovering: isHovering)
             }
         )
+        .environmentObject(promptStore)  // Use EnvironmentObject for proper reactivity
         
         let submenuWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: Self.submenuWidth, height: Self.submenuHeight),
@@ -525,9 +520,17 @@ struct RadialMenuHostView: View {
     }
 }
 
+// MARK: - Submenu Filter Type
+enum SubmenuFilter {
+    case all
+    case favorites
+    case recent
+}
+
 // MARK: - Radial Submenu View (for prompts list)
 struct RadialSubmenuView: View {
-    let prompts: [Prompt]
+    @EnvironmentObject var promptStore: PromptStore
+    let filter: SubmenuFilter
     let title: String
     let onCopy: (Prompt) -> Void
     let onClose: () -> Void
@@ -535,11 +538,23 @@ struct RadialSubmenuView: View {
     
     @State private var searchText = ""
     
+    // Compute prompts based on filter - this is REACTIVE to PromptStore changes
+    private var basePrompts: [Prompt] {
+        switch filter {
+        case .all:
+            return promptStore.prompts
+        case .favorites:
+            return promptStore.prompts.filter { $0.isFavorite }
+        case .recent:
+            return promptStore.recentPrompts
+        }
+    }
+    
     var filteredPrompts: [Prompt] {
         if searchText.isEmpty {
-            return prompts
+            return basePrompts
         }
-        return prompts.filter {
+        return basePrompts.filter {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
             $0.content.localizedCaseInsensitiveContains(searchText)
         }

@@ -10,6 +10,10 @@ import SwiftUI
 import Combine
 
 class PromptStore: ObservableObject {
+    // MARK: - Singleton
+    // Use shared instance to ensure all components use the SAME PromptStore
+    static let shared = PromptStore()
+    
     @Published var prompts: [Prompt] = []
     @Published var categories: [Category] = []
     @Published var searchText: String = ""
@@ -70,6 +74,7 @@ class PromptStore: ObservableObject {
     }
     
     var recentPrompts: [Prompt] {
+        // Show recently USED prompts (ones that have been copied)
         prompts
             .filter { $0.lastUsedAt != nil }
             .sorted { ($0.lastUsedAt ?? .distantPast) > ($1.lastUsedAt ?? .distantPast) }
