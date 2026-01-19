@@ -151,8 +151,8 @@ class FloatingBubbleController: NSObject {
             hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
                 // Only collapse if not dragging
                 guard let self = self, self.dragStartWindowPosition == nil else { return }
+                // collapse() already handles hiding submenu
                 self.collapse()
-                self.hideSubmenu()
             }
         }
     }
@@ -311,6 +311,9 @@ class FloatingBubbleController: NSObject {
         let hDir = currentHorizontalDirection
         let vDir = currentVerticalDirection
         
+        // CRITICAL: Immediately hide and release submenu to prevent orphaned windows
+        hideSubmenuImmediately()
+        
         // update view state to trigger reverse animation
         if let radialMenuWindow = radialMenuWindow,
            let hostingView = radialMenuWindow.contentView as? NSHostingView<RadialMenuHostView> {
@@ -330,11 +333,9 @@ class FloatingBubbleController: NSObject {
             }
         }
         
-        // Hide after animation completes
+        // Hide radial menu after animation completes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.radialMenuWindow?.orderOut(nil)
-            self?.submenuWindow?.orderOut(nil)
-            self?.submenuWindow = nil
         }
     }
     
@@ -363,6 +364,9 @@ class FloatingBubbleController: NSObject {
     }
     
     private func showSubmenu(with prompts: [Prompt], title: String) {
+        // CRITICAL: Close any existing submenu first to prevent orphaned windows
+        hideSubmenuImmediately()
+        
         let submenuView = RadialSubmenuView(
             prompts: prompts,
             title: title,
@@ -429,6 +433,9 @@ class FloatingBubbleController: NSObject {
         
         submenuWindow.setFrameOrigin(NSPoint(x: x, y: y))
         
+        // Store reference BEFORE showing to prevent race conditions
+        self.submenuWindow = submenuWindow
+        
         submenuWindow.alphaValue = 0
         submenuWindow.orderFront(nil)
         
@@ -437,20 +444,27 @@ class FloatingBubbleController: NSObject {
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             submenuWindow.animator().alphaValue = 1
         }
-        
-        self.submenuWindow = submenuWindow
+    }
+    
+    // Immediately hide submenu without animation (for cleanup)
+    private func hideSubmenuImmediately() {
+        submenuWindow?.orderOut(nil)
+        submenuWindow = nil
     }
     
     private func hideSubmenu() {
-        guard let submenuWindow = submenuWindow else { return }
+        guard let windowToHide = submenuWindow else { return }
+        
+        // Capture the specific window reference to hide
+        // Clear our reference immediately to prevent race conditions
+        self.submenuWindow = nil
         
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            submenuWindow.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            self?.submenuWindow?.orderOut(nil)
-            self?.submenuWindow = nil
+            windowToHide.animator().alphaValue = 0
+        }, completionHandler: {
+            windowToHide.orderOut(nil)
         })
     }
     
