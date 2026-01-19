@@ -72,6 +72,7 @@ class FloatingBubbleController: NSObject {
         
         let bubbleView = AssistiveTouchBubbleView(
             onTap: { [weak self] in self?.toggleMenu() },
+            onHoverChange: { [weak self] isHovering in self?.onHoverStateChange(component: "bubble", isHovering: isHovering) },
             onDragStart: { [weak self] in self?.startDrag() },
             onDrag: { [weak self] translation in self?.moveBubble(by: translation) },
             onDragEnd: { [weak self] in self?.endDrag() }
@@ -124,6 +125,37 @@ class FloatingBubbleController: NSObject {
     
     private var dragStartWindowPosition: NSPoint?
     private var dragStartMousePosition: NSPoint?
+    private var hoverTimer: Timer?
+    private var hoveredComponents: Set<String> = []
+    
+    // Unified Hover Logic with Component Tracking
+    private func onHoverStateChange(component: String, isHovering: Bool) {
+        if isHovering {
+            hoveredComponents.insert(component)
+        } else {
+            hoveredComponents.remove(component)
+        }
+        
+        if !hoveredComponents.isEmpty {
+            // Mouse is over at least one component: Cancel collapse timer
+            hoverTimer?.invalidate()
+            hoverTimer = nil
+            
+            // Auto-expand if hovering bubble specifically
+            if component == "bubble" && isHovering && !isExpanded && dragStartWindowPosition == nil {
+                expand()
+            }
+        } else {
+            // Mouse exited ALL components: Start collapse timer
+            hoverTimer?.invalidate()
+            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
+                // Only collapse if not dragging
+                guard let self = self, self.dragStartWindowPosition == nil else { return }
+                self.collapse()
+                self.hideSubmenu()
+            }
+        }
+    }
     
     func startDrag() {
         // Capture BOTH window position AND mouse screen position at drag start
@@ -197,6 +229,9 @@ class FloatingBubbleController: NSObject {
             },
             onClose: { [weak self] in
                 self?.collapse()
+            },
+            onHoverChange: { [weak self] isHovering in
+                self?.onHoverStateChange(component: "menu", isHovering: isHovering)
             }
         )
         
@@ -220,7 +255,10 @@ class FloatingBubbleController: NSObject {
                     },
                     onClose: { [weak self] in
                         self?.collapse()
-                    }
+                    },
+                    onHoverChange: { [weak self] isHovering in
+                       self?.onHoverStateChange(component: "menu", isHovering: isHovering)
+                   }
                 )
             }
         }
@@ -280,7 +318,8 @@ class FloatingBubbleController: NSObject {
                 isExpanded: false,
                 horizontalDirection: hDir,
                 verticalDirection: vDir,
-                onAction: { _ in }
+                onAction: { _ in },
+                onHoverChange: { _ in }
             )
             
             // Fade out window alongside view animation
@@ -333,6 +372,9 @@ class FloatingBubbleController: NSObject {
             },
             onClose: { [weak self] in
                 self?.hideSubmenu()
+            },
+            onHoverChange: { [weak self] isHovering in
+                self?.onHoverStateChange(component: "submenu", isHovering: isHovering)
             }
         )
         
@@ -348,20 +390,44 @@ class FloatingBubbleController: NSObject {
         submenuWindow.isOpaque = false
         submenuWindow.hasShadow = true
         submenuWindow.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        submenuWindow.ignoresMouseEvents = false // Explicitly allow interaction
         
         let hostingView = NSHostingView(rootView: submenuView)
         submenuWindow.contentView = hostingView
         
-        // Position submenu to left of bubble
+        // Smart Positioning
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.visibleFrame
-        var x = bubblePosition.x - Self.submenuWidth - 20
-        if x < screenFrame.minX {
-            x = bubblePosition.x + Self.bubbleSize + 20
-        }
-        let y = bubblePosition.y + Self.bubbleSize / 2 - Self.submenuHeight / 2
         
-        submenuWindow.setFrameOrigin(NSPoint(x: x, y: max(screenFrame.minY + 10, y)))
+        // Get Main Menu frame to align relative to it
+        let menuFrame = radialMenuWindow?.frame ?? NSRect(origin: bubblePosition, size: .zero)
+        let hDir = currentHorizontalDirection
+        let padding: CGFloat = 10
+        
+        var x: CGFloat
+        var y: CGFloat
+        
+        // Horizontal: Attempt to place next to the Menu
+        if hDir == .left {
+            // Menu is Left of Bubble -> Place Submenu Left of Menu
+            x = menuFrame.minX - Self.submenuWidth - padding
+        } else {
+            // Menu is Right of Bubble -> Place Submenu Right of Menu
+            x = menuFrame.maxX + padding
+        }
+        
+        // CRITICAL: Clamp to screen horizontal bounds
+        // This ensures that if there isn't space on the requested side, it slides back on screen
+        // overlapping the menu if necessary, but NEVER going off-screen.
+        x = max(screenFrame.minX + padding, min(x, screenFrame.maxX - Self.submenuWidth - padding))
+        
+        // Vertical: Center on bubble
+        y = bubblePosition.y + (Self.bubbleSize / 2) - (Self.submenuHeight / 2)
+        
+        // CRITICAL: Clamp to screen vertical bounds
+        y = max(screenFrame.minY + padding, min(y, screenFrame.maxY - Self.submenuHeight - padding))
+        
+        submenuWindow.setFrameOrigin(NSPoint(x: x, y: y))
         
         submenuWindow.alphaValue = 0
         submenuWindow.orderFront(nil)
@@ -402,6 +468,7 @@ struct RadialMenuHostView: View {
     let verticalDirection: MenuVerticalDirection
     let onAction: (RadialAction) -> Void
     var onClose: (() -> Void)? = nil
+    var onHoverChange: ((Bool) -> Void)? = nil
     
     // Compute alignment based on both directions
     private var alignment: Alignment {
@@ -432,6 +499,9 @@ struct RadialMenuHostView: View {
             )
         }
         .frame(width: 200, height: 420)
+        .onHover { hovering in
+            onHoverChange?(hovering)
+        }
     }
 }
 
@@ -441,6 +511,7 @@ struct RadialSubmenuView: View {
     let title: String
     let onCopy: (Prompt) -> Void
     let onClose: () -> Void
+    var onHoverChange: ((Bool) -> Void)? = nil
     
     @State private var searchText = ""
     
@@ -466,8 +537,10 @@ struct RadialSubmenuView: View {
                 
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(.system(size: 22)) // Larger size
+                        .foregroundStyle(.white.opacity(0.8)) // More visible
+                        .padding(8) // Larger touch area
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
             }
@@ -537,6 +610,9 @@ struct RadialSubmenuView: View {
                 )
                 .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
         )
+        .onHover { hovering in
+            onHoverChange?(hovering)
+        }
     }
 }
 
@@ -597,6 +673,7 @@ struct SubmenuPromptRow: View {
 // MARK: - AssistiveTouch Bubble View
 struct AssistiveTouchBubbleView: View {
     var onTap: () -> Void
+    var onHoverChange: ((Bool) -> Void)? = nil
     var onDragStart: () -> Void
     var onDrag: (CGSize) -> Void
     var onDragEnd: () -> Void
@@ -670,6 +747,7 @@ struct AssistiveTouchBubbleView: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                 isHovering = hovering
             }
+            onHoverChange?(hovering)
         }
         .gesture(
             DragGesture(minimumDistance: 2, coordinateSpace: .global)
@@ -713,7 +791,7 @@ struct AssistiveTouchBubbleView: View {
 }
 
 #Preview("Bubble") {
-    AssistiveTouchBubbleView(onTap: {}, onDragStart: {}, onDrag: { _ in }, onDragEnd: {})
+    AssistiveTouchBubbleView(onTap: {}, onHoverChange: { _ in }, onDragStart: {}, onDrag: { _ in }, onDragEnd: {})
         .frame(width: 80, height: 80)
         .background(Color.gray.opacity(0.3))
 }
