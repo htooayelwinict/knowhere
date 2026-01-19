@@ -18,6 +18,9 @@ class FloatingBubbleController: NSObject {
     private var isExpanded = false
     private var bubblePosition: NSPoint = .zero
     
+    // Keyboard monitor for shortcuts when bubble is active
+    private var keyboardMonitor: Any?
+    
     // Determine menu HORIZONTAL direction based on bubble position
     private var currentHorizontalDirection: MenuHorizontalDirection {
         guard let screen = NSScreen.main else { return .left }
@@ -44,9 +47,74 @@ class FloatingBubbleController: NSObject {
         super.init()
         setupBubble()
         setupRadialMenu()
+        setupKeyboardShortcuts()
+    }
+    
+    deinit {
+        if let monitor = keyboardMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
     
     // MARK: - Setup
+    
+    private func setupKeyboardShortcuts() {
+        // Monitor keyboard events when app is active
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            
+            // === GLOBAL SHORTCUTS (work anytime Knowhere app is active) ===
+            
+            // Cmd+N - New Prompt (always available)
+            if modifiers == .command && event.charactersIgnoringModifiers == "n" {
+                self.handleAction(.newPrompt)
+                return nil // Consume event
+            }
+            
+            // Cmd+, - Settings (always available)
+            if modifiers == .command && event.charactersIgnoringModifiers == "," {
+                self.handleAction(.settings)
+                return nil
+            }
+            
+            // === BUBBLE-SPECIFIC SHORTCUTS (only when menu is expanded) ===
+            guard self.isExpanded else { return event }
+            
+            // Cmd+O - Open Main App
+            if modifiers == .command && event.charactersIgnoringModifiers == "o" {
+                self.handleAction(.openApp)
+                return nil
+            }
+            
+            // Cmd+1 - Prompts
+            if modifiers == .command && event.charactersIgnoringModifiers == "1" {
+                self.handleAction(.prompts)
+                return nil
+            }
+            
+            // Cmd+2 - Favorites
+            if modifiers == .command && event.charactersIgnoringModifiers == "2" {
+                self.handleAction(.favorites)
+                return nil
+            }
+            
+            // Cmd+3 - Recent
+            if modifiers == .command && event.charactersIgnoringModifiers == "3" {
+                self.handleAction(.recent)
+                return nil
+            }
+            
+            // Escape - Close menu
+            if event.keyCode == 53 { // Escape key
+                self.collapse()
+                return nil
+            }
+            
+            return event
+        }
+    }
     
     private func setupBubble() {
         guard let screen = NSScreen.main else { return }
