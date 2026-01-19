@@ -26,6 +26,12 @@ struct KnowhereApp: App {
                     // Share PromptStore with AppDelegate (critical for programmatic windows)
                     appDelegate.sharedPromptStore = promptStore
                     
+                    // CRITICAL: Update floating controllers with shared PromptStore
+                    // This ensures bubble/panel show same data as main window
+                    appDelegate.floatingBubble?.updatePromptStore(promptStore)
+                    appDelegate.floatingPanel?.updatePromptStore(promptStore)
+                    NSLog("✅ Shared PromptStore with FloatingBubble and FloatingPanel")
+                    
                     // Capture openWindow action when window appears
                     NSLog("✅ ContentView.onAppear - Sharing PromptStore and capturing openWindow action")
                     appDelegate.openMainWindowAction = openMainWindow

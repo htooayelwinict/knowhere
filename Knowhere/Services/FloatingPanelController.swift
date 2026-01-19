@@ -16,9 +16,17 @@ class FloatingPanelController: NSObject {
         panel?.isVisible ?? false
     }
     
-    override init() {
-        self.promptStore = PromptStore()
+    // Accept optional PromptStore, create new one if not provided
+    init(promptStore: PromptStore? = nil) {
+        self.promptStore = promptStore ?? PromptStore()
         super.init()
+        setupPanel()
+    }
+    
+    // Allow updating the PromptStore after initialization (for shared store injection)
+    func updatePromptStore(_ newStore: PromptStore) {
+        self.promptStore = newStore
+        // Recreate panel with new store
         setupPanel()
     }
     

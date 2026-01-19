@@ -39,11 +39,17 @@ class FloatingBubbleController: NSObject {
     static let submenuWidth: CGFloat = 300
     static let submenuHeight: CGFloat = 340
     
-    override init() {
-        self.promptStore = PromptStore()
+    // Accept optional PromptStore, create new one if not provided
+    init(promptStore: PromptStore? = nil) {
+        self.promptStore = promptStore ?? PromptStore()
         super.init()
         setupBubble()
         setupRadialMenu()
+    }
+    
+    // Allow updating the PromptStore after initialization (for shared store injection)
+    func updatePromptStore(_ newStore: PromptStore) {
+        self.promptStore = newStore
     }
     
     // MARK: - Setup

@@ -2,6 +2,100 @@
 
 ## January 20, 2026
 
+---
+
+### Issue: Floating Bubble Doesn't Show New Prompts Created in Main Window
+
+**Severity:** High
+**Status:** ✅ Fixed
+
+#### Problem
+When creating a new prompt in the main Knowhere window, the floating bubble's submenus (Prompts, Recent, Favorites) would not show the newly created prompt. Users had to restart the app to see their new prompts in the bubble menu.
+
+#### Root Cause
+**Multiple PromptStore Instances Not Sharing Data**
+
+The app was creating **three separate** `PromptStore` instances:
+1. `KnowhereApp` → `@StateObject private var promptStore = PromptStore()` (used by main window)
+2. `FloatingBubbleController` → `self.promptStore = PromptStore()` (used by bubble)
+3. `FloatingPanelController` → `self.promptStore = PromptStore()` (used by floating panel)
+
+Each instance independently loaded data from disk at startup. When the main window added a prompt, it saved to disk and updated its own `@Published var prompts`, but the bubble/panel still referenced their old in-memory copies.
+
+#### Solution
+**Share Single PromptStore Instance Across All Controllers**
+
+**1. Modified FloatingBubbleController to accept shared PromptStore:**
+```swift
+// Accept optional PromptStore, create new one if not provided
+init(promptStore: PromptStore? = nil) {
+    self.promptStore = promptStore ?? PromptStore()
+    super.init()
+    // ...
+}
+
+// Allow updating the PromptStore after initialization
+func updatePromptStore(_ newStore: PromptStore) {
+    self.promptStore = newStore
+}
+```
+
+**2. Modified FloatingPanelController to accept shared PromptStore:**
+```swift
+// Accept optional PromptStore, create new one if not provided
+init(promptStore: PromptStore? = nil) {
+    self.promptStore = promptStore ?? PromptStore()
+    super.init()
+    setupPanel()
+}
+
+// Allow updating the PromptStore after initialization
+func updatePromptStore(_ newStore: PromptStore) {
+    self.promptStore = newStore
+    setupPanel() // Recreate panel with new store
+}
+```
+
+**3. Updated KnowhereApp to inject shared PromptStore:**
+```swift
+.onAppear {
+    // Share PromptStore with AppDelegate
+    appDelegate.sharedPromptStore = promptStore
+    
+    // CRITICAL: Update floating controllers with shared PromptStore
+    appDelegate.floatingBubble?.updatePromptStore(promptStore)
+    appDelegate.floatingPanel?.updatePromptStore(promptStore)
+    NSLog("✅ Shared PromptStore with FloatingBubble and FloatingPanel")
+    // ...
+}
+```
+
+#### Data Flow (After Fix)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Single PromptStore Instance               │
+│    (Created by KnowhereApp, shared via AppDelegate)         │
+└─────────────────────────────────────────────────────────────┘
+            ▲              ▲                ▲
+            │              │                │
+     ┌──────┴──────┐ ┌─────┴─────┐ ┌───────┴───────┐
+     │ ContentView │ │  Floating │ │   Floating    │
+     │ (Main App)  │ │   Bubble  │ │     Panel     │
+     └─────────────┘ └───────────┘ └───────────────┘
+```
+
+#### Files Modified
+- [FloatingBubbleController.swift](../Knowhere/Services/FloatingBubbleController.swift)
+  - Added `init(promptStore:)` parameter
+  - Added `updatePromptStore(_:)` method
+- [FloatingPanelController.swift](../Knowhere/Services/FloatingPanelController.swift)
+  - Added `init(promptStore:)` parameter
+  - Added `updatePromptStore(_:)` method
+- [KnowhereApp.swift](../Knowhere/KnowhereApp.swift)
+  - Added calls to `updatePromptStore()` in `onAppear`
+
+---
+
 ### Issue: Recent Submenu Hanging & Unable to Close
 
 **Severity:** High
