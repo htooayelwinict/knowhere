@@ -213,10 +213,10 @@ struct AssistiveTouchMenuView: View {
                 ScrollView {
                     LazyVStack(spacing: 4) {
                         ForEach(prompts) { prompt in
-                            PromptRowButton(prompt: prompt) {
+                            PromptRowButton(promptStore: promptStore, prompt: prompt, onCopy: {
                                 promptStore.copyPrompt(prompt)
                                 onClose()
-                            }
+                            }, onClose: onClose)
                         }
                     }
                     .padding(12)
@@ -324,8 +324,10 @@ struct MenuActionButton: View {
 
 // MARK: - Prompt Row Button
 struct PromptRowButton: View {
+    @ObservedObject var promptStore: PromptStore
     let prompt: Prompt
     let onCopy: () -> Void
+    var onClose: (() -> Void)? = nil
     
     @State private var isHovering = false
     
@@ -359,11 +361,10 @@ struct PromptRowButton: View {
                 
                 Spacer()
                 
-                if isHovering {
-                    Image(systemName: "doc.on.doc")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                }
+                // Always show copy icon for visibility
+                Image(systemName: "doc.on.doc")
+                    .font(.caption)
+                    .foregroundColor(isHovering ? .blue : .white.opacity(0.4))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -376,6 +377,38 @@ struct PromptRowButton: View {
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
+            }
+        }
+        .contextMenu {
+            Button {
+                onCopy()
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            
+            Button {
+                promptStore.toggleFavorite(prompt)
+            } label: {
+                Label(
+                    prompt.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                    systemImage: prompt.isFavorite ? "star.slash" : "star"
+                )
+            }
+            
+            Divider()
+            
+            Button {
+                // Post notification to edit this prompt
+                NotificationCenter.default.post(name: .editPrompt, object: prompt)
+                onClose?()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            
+            Button(role: .destructive) {
+                promptStore.deletePrompt(prompt)
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
     }

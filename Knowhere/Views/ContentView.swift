@@ -68,6 +68,12 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .showNewPromptSheet)) { _ in
             showingNewPrompt = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showEditPromptSheet)) { notification in
+            if let prompt = notification.object as? Prompt {
+                promptToEdit = prompt
+                isEditingPrompt = true
+            }
+        }
     }
 }
 

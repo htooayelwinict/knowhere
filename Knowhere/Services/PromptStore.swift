@@ -8,8 +8,14 @@
 import Foundation
 import SwiftUI
 import Combine
+import os.log
+
+private let logger = Logger(subsystem: "com.knowhere.app", category: "PromptStore")
 
 class PromptStore: ObservableObject {
+    // MARK: - Clipboard Security
+    private var clipboardClearWorkItem: DispatchWorkItem?
+    private let clipboardClearDelay: TimeInterval = 60.0 // 60 seconds
     // MARK: - Singleton
     // Use shared instance to ensure all components use the SAME PromptStore
     static let shared = PromptStore()
@@ -22,23 +28,33 @@ class PromptStore: ObservableObject {
     private let promptsKey = "knowhere_prompts"
     private let categoriesKey = "knowhere_categories"
     
-    private var saveDir: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    private var saveDir: URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            logger.error("Failed to get Application Support directory")
+            return nil
+        }
         let knowhereDir = appSupport.appendingPathComponent("Knowhere", isDirectory: true)
         
         if !FileManager.default.fileExists(atPath: knowhereDir.path) {
-            try? FileManager.default.createDirectory(at: knowhereDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: knowhereDir, withIntermediateDirectories: true)
+                // Set restrictive permissions (owner read/write only)
+                try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: knowhereDir.path)
+            } catch {
+                logger.error("Failed to create save directory: \(error.localizedDescription)")
+                return nil
+            }
         }
         
         return knowhereDir
     }
     
-    private var promptsFile: URL {
-        saveDir.appendingPathComponent("prompts.json")
+    private var promptsFile: URL? {
+        saveDir?.appendingPathComponent("prompts.json")
     }
     
-    private var categoriesFile: URL {
-        saveDir.appendingPathComponent("categories.json")
+    private var categoriesFile: URL? {
+        saveDir?.appendingPathComponent("categories.json")
     }
     
     init() {
@@ -113,9 +129,24 @@ class PromptStore: ObservableObject {
     }
     
     func copyPrompt(_ prompt: Prompt) {
+        // Cancel any pending clipboard clear
+        clipboardClearWorkItem?.cancel()
+        
         // Copy to clipboard
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(prompt.content, forType: .string)
+        
+        // Schedule auto-clear after 60 seconds for security
+        let workItem = DispatchWorkItem { [weak self] in
+            // Only clear if clipboard still contains prompt content
+            if let currentContent = NSPasteboard.general.string(forType: .string),
+               currentContent == prompt.content {
+                NSPasteboard.general.clearContents()
+                logger.info("Clipboard auto-cleared after timeout")
+            }
+        }
+        clipboardClearWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + clipboardClearDelay, execute: workItem)
         
         // Update usage stats
         if var updatedPrompt = prompts.first(where: { $0.id == prompt.id }) {
@@ -164,27 +195,82 @@ class PromptStore: ObservableObject {
     // MARK: - Persistence
     private func loadData() {
         // Load prompts
-        if let data = try? Data(contentsOf: promptsFile),
-           let decoded = try? JSONDecoder().decode([Prompt].self, from: data) {
-            prompts = decoded
+        guard let promptsURL = promptsFile else {
+            logger.warning("Cannot load prompts: save directory unavailable")
+            return
+        }
+        
+        do {
+            let data = try Data(contentsOf: promptsURL)
+            prompts = try JSONDecoder().decode([Prompt].self, from: data)
+            logger.info("Loaded \(self.prompts.count) prompts")
+        } catch {
+            // File might not exist on first launch - this is expected
+            if (error as NSError).domain != NSCocoaErrorDomain || (error as NSError).code != NSFileReadNoSuchFileError {
+                logger.error("Failed to load prompts: \(error.localizedDescription)")
+            }
         }
         
         // Load categories
-        if let data = try? Data(contentsOf: categoriesFile),
-           let decoded = try? JSONDecoder().decode([Category].self, from: data) {
-            categories = decoded
+        guard let categoriesURL = categoriesFile else {
+            logger.warning("Cannot load categories: save directory unavailable")
+            return
+        }
+        
+        do {
+            let data = try Data(contentsOf: categoriesURL)
+            categories = try JSONDecoder().decode([Category].self, from: data)
+            logger.info("Loaded \(self.categories.count) categories")
+        } catch {
+            if (error as NSError).domain != NSCocoaErrorDomain || (error as NSError).code != NSFileReadNoSuchFileError {
+                logger.error("Failed to load categories: \(error.localizedDescription)")
+            }
         }
     }
     
     private func saveData() {
         // Save prompts
-        if let data = try? JSONEncoder().encode(prompts) {
-            try? data.write(to: promptsFile)
+        guard let promptsURL = promptsFile else {
+            logger.error("Cannot save prompts: save directory unavailable")
+            showSaveError("Unable to access save location")
+            return
+        }
+        
+        do {
+            let data = try JSONEncoder().encode(prompts)
+            try data.write(to: promptsURL, options: .atomic)
+            // Set restrictive file permissions (owner read/write only)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: promptsURL.path)
+            logger.debug("Saved \(self.prompts.count) prompts")
+        } catch {
+            logger.error("Failed to save prompts: \(error.localizedDescription)")
+            showSaveError("Failed to save prompts: \(error.localizedDescription)")
         }
         
         // Save categories
-        if let data = try? JSONEncoder().encode(categories) {
-            try? data.write(to: categoriesFile)
+        guard let categoriesURL = categoriesFile else {
+            logger.error("Cannot save categories: save directory unavailable")
+            return
+        }
+        
+        do {
+            let data = try JSONEncoder().encode(categories)
+            try data.write(to: categoriesURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: categoriesURL.path)
+            logger.debug("Saved \(self.categories.count) categories")
+        } catch {
+            logger.error("Failed to save categories: \(error.localizedDescription)")
+        }
+    }
+    
+    private func showSaveError(_ message: String) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Save Failed"
+            alert.informativeText = message
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         }
     }
 }

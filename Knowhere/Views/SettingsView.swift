@@ -151,6 +151,21 @@ struct DataSettingsView: View {
         panel.allowsMultipleSelection = false
 
         if panel.runModal() == .OK, let url = panel.urls.first {
+            // Security: Check file size (max 10MB)
+            let maxFileSize: Int64 = 10 * 1024 * 1024 // 10MB
+            do {
+                let fileAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                if let fileSize = fileAttributes[.size] as? Int64, fileSize > maxFileSize {
+                    errorMessage = "File too large. Maximum size is 10MB."
+                    showImportError = true
+                    return
+                }
+            } catch {
+                errorMessage = "Cannot read file attributes"
+                showImportError = true
+                return
+            }
+            
             guard let data = try? Data(contentsOf: url),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let promptsArray = json["prompts"] as? [[String: Any]],
@@ -163,6 +178,7 @@ struct DataSettingsView: View {
             // Import categories first (prompts reference them)
             var categoryMap: [String: UUID] = [:]
             for categoryDict in categoriesArray {
+                // Schema validation: ensure all required fields exist and have correct types
                 guard let idString = categoryDict["id"] as? String,
                       let name = categoryDict["name"] as? String,
                       let colorHex = categoryDict["colorHex"] as? String,
@@ -170,8 +186,16 @@ struct DataSettingsView: View {
                       let id = UUID(uuidString: idString) else {
                     continue
                 }
+                
+                // Input sanitization: trim whitespace and validate lengths
+                let sanitizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                let sanitizedIcon = icon.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                guard sanitizedName.count <= 100, sanitizedIcon.count <= 50 else {
+                    continue // Skip invalid entries
+                }
 
-                let category = Category(id: id, name: name, colorHex: colorHex, icon: icon)
+                let category = Category(id: id, name: sanitizedName, colorHex: colorHex, icon: sanitizedIcon)
                 promptStore.addCategory(category)
                 categoryMap[idString] = id
             }
@@ -179,10 +203,20 @@ struct DataSettingsView: View {
             // Import prompts
             var promptCount = 0
             for promptDict in promptsArray {
+                // Schema validation
                 guard let idString = promptDict["id"] as? String,
                       let id = UUID(uuidString: idString),
                       let title = promptDict["title"] as? String,
                       let content = promptDict["content"] as? String else {
+                    continue
+                }
+                
+                // Input sanitization
+                let sanitizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let sanitizedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // Validate lengths (match PromptEditorView limits)
+                guard sanitizedTitle.count <= 200, sanitizedContent.count <= 100_000 else {
                     continue
                 }
 
@@ -192,8 +226,8 @@ struct DataSettingsView: View {
 
                 let prompt = Prompt(
                     id: id,
-                    title: title,
-                    content: content,
+                    title: sanitizedTitle,
+                    content: sanitizedContent,
                     categoryId: categoryId,
                     isFavorite: isFavorite
                 )

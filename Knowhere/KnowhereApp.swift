@@ -88,6 +88,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var eventMonitor: Any?
     var openMainWindowAction: (() -> Void)?
     var programmaticMainWindow: NSWindow?
+    
+    // Hotkey debouncing to prevent rapid keypresses from cascading
+    private var lastPanelToggle: Date = .distantPast
+    private var lastBubbleToggle: Date = .distantPast
+    private let debounceInterval: TimeInterval = 0.3 // 300ms
 
     // Computed property to get the best available PromptStore
     var promptStore: PromptStore {
@@ -139,6 +144,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             name: .newPrompt,
             object: nil
         )
+
+        // Listen for edit prompt requests (from touch menu)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEditPromptRequest(_:)),
+            name: .editPrompt,
+            object: nil
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -186,10 +199,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func toggleFloatingPanel() {
+        let now = Date()
+        guard now.timeIntervalSince(lastPanelToggle) >= debounceInterval else {
+            return // Ignore rapid keypresses
+        }
+        lastPanelToggle = now
         floatingPanel?.toggle()
     }
 
     @objc func toggleFloatingBubble() {
+        let now = Date()
+        guard now.timeIntervalSince(lastBubbleToggle) >= debounceInterval else {
+            return // Ignore rapid keypresses
+        }
+        lastBubbleToggle = now
         floatingBubble?.toggle()
     }
 
@@ -328,12 +351,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             NotificationCenter.default.post(name: .showNewPromptSheet, object: nil)
         }
     }
+
+    @objc func handleEditPromptRequest(_ notification: Notification) {
+        NSLog("🔵 handleEditPromptRequest called")
+        
+        guard let prompt = notification.object as? Prompt else {
+            NSLog("🔴 No prompt in notification")
+            return
+        }
+        
+        // First ensure main window is open and visible
+        openMainWindow()
+        
+        // Activate app to ensure it receives focus
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Longer delay to ensure window is fully ready and view hierarchy is set up
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NSLog("🔵 Posting showEditPromptSheet notification")
+            // Post the sheet notification after window is visible
+            NotificationCenter.default.post(name: .showEditPromptSheet, object: prompt)
+        }
+    }
 }
 
 // MARK: - Notification Names
 extension Notification.Name {
     static let newPrompt = Notification.Name("newPrompt")
     static let showNewPromptSheet = Notification.Name("showNewPromptSheet")
+    static let editPrompt = Notification.Name("editPrompt")
+    static let showEditPromptSheet = Notification.Name("showEditPromptSheet")
     static let toggleFloatingPanel = Notification.Name("toggleFloatingPanel")
     static let openMainWindow = Notification.Name("openMainWindow")
     static let openSettingsWindow = Notification.Name("openSettingsWindow")

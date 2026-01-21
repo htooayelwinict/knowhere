@@ -18,11 +18,19 @@ struct PromptEditorView: View {
     
     let mode: PromptEditorMode
     
+    // Input validation limits
+    private let maxTitleLength = 200
+    private let maxContentLength = 100_000
+    
     @State private var title: String = ""
     @State private var content: String = ""
     @State private var selectedCategoryId: UUID?
     @State private var isFavorite: Bool = false
     @FocusState private var isTitleFocused: Bool
+    
+    // Character count helpers
+    private var titleRemaining: Int { maxTitleLength - title.count }
+    private var contentRemaining: Int { maxContentLength - content.count }
     
     var isEditing: Bool {
         if case .edit = mode { return true }
@@ -58,9 +66,15 @@ struct PromptEditorView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Title field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Title")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text("Title")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(title.count)/\(maxTitleLength)")
+                                .font(.caption)
+                                .foregroundColor(titleRemaining < 20 ? Color.orange : Color.gray)
+                        }
                         
                         TextField("Enter a title for this prompt", text: $title)
                             .textFieldStyle(.plain)
@@ -71,6 +85,11 @@ struct PromptEditorView: View {
                                     .fill(Color.white.opacity(0.1))
                             )
                             .focused($isTitleFocused)
+                            .onChange(of: title) { newValue in
+                                if newValue.count > maxTitleLength {
+                                    title = String(newValue.prefix(maxTitleLength))
+                                }
+                            }
                     }
                     
                     // Category picker
@@ -103,9 +122,15 @@ struct PromptEditorView: View {
                     
                     // Content field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Prompt Content")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text("Prompt Content")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(content.count.formatted()) / \(maxContentLength.formatted())")
+                                .font(.caption)
+                                .foregroundColor(contentRemaining < 1000 ? Color.orange : Color.gray)
+                        }
                         
                         TextEditor(text: $content)
                             .font(.system(size: 14, design: .monospaced))
@@ -116,6 +141,11 @@ struct PromptEditorView: View {
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(Color.white.opacity(0.1))
                             )
+                            .onChange(of: content) { newValue in
+                                if newValue.count > maxContentLength {
+                                    content = String(newValue.prefix(maxContentLength))
+                                }
+                            }
                     }
                     
                     // Tips
@@ -156,7 +186,7 @@ struct PromptEditorView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.return, modifiers: .command) // Cmd+Enter to save
-                .disabled(title.isEmpty || content.isEmpty)
+                .disabled(title.isEmpty || content.isEmpty || title.count > maxTitleLength || content.count > maxContentLength)
                 .buttonStyle(.borderedProminent)
             }
             .padding()
